@@ -1,4 +1,4 @@
-from utilities import init_env
+from common.utilities import init_env
 
 def main():
     map_name = "4x4"

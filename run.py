@@ -1,8 +1,8 @@
-from a2c import Model
-from policies import PolicyFullyConnected
-from utilities import global_seed
-from runner import Runner
-from utilities import init_env
+from a2c.model import Model
+from a2c.policies import PolicyFullyConnected
+from common.utilities import global_seed
+from a2c.runner import Runner
+from common.utilities import init_env
 
 def main():
     global_seed()

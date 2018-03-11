@@ -4,7 +4,7 @@ import random
 import gym
 from gym.envs.registration import register
 
-from env_wrapper import EnvWrapper
+from common.env_wrapper import EnvWrapper
 
 def init_env(map_name):
     register(
