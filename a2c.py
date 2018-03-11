@@ -1,14 +1,9 @@
-import numpy as np
 import tensorflow as tf
-import random
 
-def action_with_policy(policy):
-    rand = random.uniform(0, 1)
-    cumulated_sum = np.cumsum(policy)
-    for i in range(0, len(cumulated_sum)):
-        if rand <= cumulated_sum[i]:
-            return i
-    return 0
+def sample(probs):
+    random_uniform = tf.random_uniform(tf.shape(probs))
+    scaled_random_uniform = tf.log(random_uniform) / probs
+    return tf.argmax(scaled_random_uniform, axis=1)
 
 class Model():
 
@@ -20,40 +15,38 @@ class Model():
         self.advantage = tf.placeholder(tf.float32, [nsteps])
         self.rewards = tf.placeholder(tf.float32, [nsteps])
 
-        self.model_predict = policy(observation_space, action_space, 1, reuse=False)
-        self.model_train = policy(observation_space, action_space, nsteps, reuse=True)
+        self.model = policy(observation_space, action_space)
 
-        action_masks = tf.one_hot(self.actions, action_space)
+        logits = tf.reduce_sum(tf.one_hot(self.actions, action_space) *
+                               tf.log(self.model.policy + 1e-13), axis=1)
 
-        self.loss_policy = tf.reduce_mean(
-            -self.advantage * tf.reduce_sum(action_masks * tf.log(self.model_train.policy + 1e-13), 1))
+        self.loss_policy = -tf.reduce_mean(self.advantage * logits)
 
-        self.loss_value = tf.reduce_mean(tf.squared_difference(self.model_train.values, self.rewards))
+        self.loss_value = tf.reduce_mean(tf.squared_difference(self.model.values, self.rewards))
 
         loss = self.loss_policy + self.loss_value
-        optimizer = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate, decay=decay)
+        self.optimizer = tf.train.RMSPropOptimizer(learning_rate=self.learning_rate, decay=decay).minimize(loss)
 
-        self._train = optimizer.minimize(loss)
+        self.sampled_action = sample(self.model.policy)
         tf.global_variables_initializer().run(session=self.sess)
 
     def predict(self, observation):
-        policy, values = self.sess.run([self.model_predict.policy, self.model_predict.values],
-                                       {self.model_predict.inputs: [observation]})
-        action = action_with_policy(policy)
-        return action, values[0]
+        actions, values = self.sess.run([self.sampled_action, self.model.values],
+                                       {self.model.inputs: [observation]})
+        return actions[0], values[0]
 
     def predict_value(self, observation):
-        return self.sess.run(self.model_predict.values, {self.model_predict.inputs: [observation]})
+        return self.sess.run(self.model.values, {self.model.inputs: [observation]})
 
     def train(self, observations, rewards, actions, values):
         advantage = rewards - values
-        policy_loss, value_loss, _ = self.sess.run(
-            [self.loss_policy, self.loss_value, self._train],
+        loss_policy, loss_value, _ = self.sess.run(
+            [self.loss_policy, self.loss_value, self.optimizer],
             {
-                self.model_train.inputs: observations,
+                self.model.inputs: observations,
                 self.actions: actions,
                 self.advantage: advantage,
                 self.rewards: rewards
              }
         )
-        return policy_loss, value_loss
+        return loss_policy, loss_value
